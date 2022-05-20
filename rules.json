@@ -44,7 +44,7 @@
     "responseCode": 403
   },
   {
-    "name": "response fom json file",
+    "name": "response from json file",
     "method": "GET",
     "path": "/v1/users",
     "responseFile": "mocks/v1/users.json"

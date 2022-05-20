@@ -5,6 +5,7 @@ import io.javalin.http.Context
 import io.javalin.http.HandlerType
 import io.javalin.http.NotFoundResponse
 import org.eclipse.jetty.server.Request
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileReader
 import java.nio.file.FileSystems
@@ -14,6 +15,7 @@ import java.nio.file.Paths
 import java.nio.file.StandardWatchEventKinds.*
 
 lateinit var rules: List<Rule>
+val log = LoggerFactory.getLogger("MockFast")
 
 /**
  * TODO: documentations on github
@@ -98,10 +100,11 @@ fun handler(ctx: Context) {
         filteredRulesList.clear()
         mutableRuleList[0]
     } else {
+        log.error ("Could not find matching rule for Method : $method at path $path")
         throw NotFoundResponse()
     }
 
-    println("Found Matching Rule: ${finalRuleToUse.name}")
+    log.info("Found Matching Rule: ${finalRuleToUse.name}")
 
     val responseCode = if(finalRuleToUse.responseCode == 0)  200 else  finalRuleToUse.responseCode
     finalRuleToUse.responseHeader?.forEach { (k, v) ->  ctx.header(k,v)}
