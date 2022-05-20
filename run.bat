@@ -1,1 +1,1 @@
-java -jar mockfast.1.0.jar -p 7070 -r rules.json
+java -jar mockfast-1.0.jar -p 7070 -r rules.json
