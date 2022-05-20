@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "id": 1001,
+      "name": "John Dao",
+      "address": "NY US",
+      "DOB": "01-APR-2000"
+    },
+    {
+      "id": 1002,
+      "name": "Marry Jane",
+      "address": "Pune, IN",
+      "DOB": "15-JAN-2002"
+    }
+  ]
+}

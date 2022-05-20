@@ -1,0 +1,52 @@
+[
+  {
+    "name": "simple get",
+    "method": "GET",
+    "path": "/",
+    "responseBody": "welcome to mockfast"
+  },
+  {
+    "name": "another simple get",
+    "method": "GET",
+    "path": "/cool",
+    "responseBody": "this is cool"
+  },
+  {
+    "name": "valid login response",
+    "method": "POST",
+    "path": "/login",
+    "responseBody": "login success",
+    "requestHeader": {
+      "user": "mockfast",
+      "password": "valid"
+    }
+  },
+  {
+    "name": "invalid login response",
+    "method": "POST",
+    "path": "/login",
+    "responseBody": "login failed",
+    "requestHeader": {
+      "user": "mockfast",
+      "password": "invalid"
+    },
+    "responseHeader": {
+      "header1" : "this is header1",
+      "header2" : "this is header2"
+    },
+    "responseCode": 403
+  },
+  {
+    "name": "Bad request login response",
+    "method": "POST",
+    "path": "/login",
+    "responseBody": "login failed, require user and password headers",
+    "responseCode": 403
+  },
+  {
+    "name": "response fom json file",
+    "method": "GET",
+    "path": "/v1/users",
+    "responseFile": "mocks/v1/users.json"
+  }
+]
