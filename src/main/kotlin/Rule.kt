@@ -1,3 +1,6 @@
+import com.google.gson.JsonElement
+
+
 class Rule(
     val name: String,
     val method: String,
@@ -6,5 +9,6 @@ class Rule(
     val responseBody: String,
     val responseFile: String?,
     val responseHeader: Map<String, String>?,
-    val responseCode: Int
+    val responseCode: Int,
+    val requestBody: JsonElement?
 )

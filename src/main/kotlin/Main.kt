@@ -32,6 +32,8 @@ fun main(args: Array<String>) {
     val port = argsMap["-p"]?.toString()?.toInt() ?: 7070
     val ruleFile = argsMap["-r"]?.toString() ?: "rules.json"
 
+    println(ruleFile)
+
     Thread { startWatchingRules(ruleFile) }.start()
     val app = Javalin.create().start(port)
     getHandlers().forEach {
@@ -61,6 +63,7 @@ fun processRules(ruleFile: String) {
         val gson = Gson()
         val type = object : TypeToken<List<Rule>>() {}.type
         rules = gson.fromJson(Files.readString(Path.of(ruleFile)), type) as List<Rule>
+        println(rules)
     } catch (e: Exception) {
         println("Error Processing Rules file: ${e.message}")
     }
@@ -70,6 +73,7 @@ fun handler(ctx: Context) {
     val path = (ctx.req as Request).originalURI
     val method = ctx.req.method
     val headers = ctx.headerMap()
+    val body = ctx.body()
 
     val ruleList = rules.filter { it.method == method }.filter { it.path == path }
 
@@ -78,8 +82,9 @@ fun handler(ctx: Context) {
     val filteredRulesList = mutableListOf<Rule>()
 
     for (rule in ruleList) {
+        var matching = true
+
         if (rule.requestHeader != null) {
-            var matching = true
             loop@ for (key in rule.requestHeader.keys) {
                 if (!headers.containsKey(key) || !headers[key].equals(rule.requestHeader[key].toString())) {
                     mutableRuleList.remove(rule)
@@ -87,10 +92,17 @@ fun handler(ctx: Context) {
                     break@loop
                 }
             }
-            if (matching) {
-                filteredRulesList.add(rule)
+        }
+        if(rule.requestBody != null){
+            println(rule.requestBody.toString())
+            if(rule.requestBody.toString().replace("\\s+", "") != body.replace("\\s+", "")){
                 mutableRuleList.remove(rule)
+                matching = false
             }
+        }
+        if (matching) {
+            filteredRulesList.add(rule)
+            mutableRuleList.remove(rule)
         }
     }
 
