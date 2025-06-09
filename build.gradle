@@ -18,6 +18,31 @@ dependencies {
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.12.4'
 }
 
+
+task installFrontend(type: Exec) {
+    workingDir 'config-ui'
+    commandLine 'pnpm', 'install'
+}
+
+task buildFrontend(type: Exec, dependsOn: installFrontend) {
+    workingDir 'config-ui'
+    commandLine 'pnpm', 'run', 'build'
+}
+
+task cleanFrontend(type: Delete) {
+    delete 'src/main/resources/build'
+}
+
+
+task copyFrontendToResources(type: Copy, dependsOn: buildFrontend) {
+    from 'config-ui/dist'
+    into 'src/main/resources/dist' // optional: you can change target path if needed
+}
+
+copyFrontendToResources.dependsOn cleanFrontend
+build.dependsOn(copyFrontendToResources)
+
+
 test {
     useJUnitPlatform()
 }

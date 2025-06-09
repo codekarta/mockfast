@@ -1,6 +1,7 @@
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.javalin.Javalin
+import io.javalin.core.JavalinConfig
 import io.javalin.http.Context
 import io.javalin.http.HandlerType
 import io.javalin.http.NotFoundResponse
@@ -12,10 +13,12 @@ import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.StandardWatchEventKinds.*
+import java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY
 
 lateinit var rules: List<Rule>
 val log = LoggerFactory.getLogger("MockFast")
+var mockServerConfig = MockServerConfig()
+
 
 /**
  * TODO: documentations on github
@@ -27,120 +30,94 @@ val log = LoggerFactory.getLogger("MockFast")
  */
 
 fun main(args: Array<String>) {
-
     val argsMap = buildArgsMap(args)
-    val port = argsMap["-p"]?.toString()?.toInt() ?: 7070
+    val port = argsMap["-p"]?.toString()?.toIntOrNull() ?: 7070
     val ruleFile = argsMap["-r"]?.toString() ?: "rules.json"
 
-    println(ruleFile)
+    log.info("Using rule file: $ruleFile on port $port")
 
     Thread { startWatchingRules(ruleFile) }.start()
-    val app = Javalin.create().start(port)
-    getHandlers().forEach {
-        app.addHandler(it, "/*") { ctx ->
-            handler(ctx)
+
+    val configUi = Javalin.create { config: JavalinConfig ->
+        config.addStaticFiles { staticFileConfig ->
+            staticFileConfig.directory = "/dist" // folder path
+            staticFileConfig.hostedPath = "/" // URL path
+            staticFileConfig.precompress = false
+            staticFileConfig.aliasCheck = null
         }
+    }
+
+    configUi.addHandler(HandlerType.POST, "/apply-config") { ctx ->
+        val newMockServerConfig = Gson().fromJson(ctx.body(), MockServerConfig::class.java)
+        mockServerConfig = newMockServerConfig
+        ctx.status(200)
+    }
+
+    configUi.start(7071)
+
+    val app = Javalin.create().start(port)
+    getHandlers().forEach { handlerType ->
+        app.addHandler(handlerType, "/*") { ctx -> handleRequest(ctx) }
     }
 }
 
-private fun buildArgsMap(args: Array<String>): MutableMap<String, Any?> {
-    val argsMap = mutableMapOf<String, Any?>()
-    var key = ""
-    for (arg in args) {
-        if (key == "") {
-            key = arg
-            argsMap.put(key, null)
-        } else {
-            argsMap[key] = arg
-            key = ""
-        }
-    }
-    return argsMap
-}
+private fun buildArgsMap(args: Array<String>) =
+    args.toList().chunked(2).associate { it[0] to it.getOrNull(1) }.toMutableMap()
 
 fun processRules(ruleFile: String) {
     try {
         val gson = Gson()
         val type = object : TypeToken<List<Rule>>() {}.type
-        rules = gson.fromJson(Files.readString(Path.of(ruleFile)), type) as List<Rule>
-        println(rules)
+        rules = gson.fromJson(Files.readString(Path.of(ruleFile)), type)
+        log.info("Loaded ${rules.size} rules from $ruleFile")
     } catch (e: Exception) {
-        println("Error Processing Rules file: ${e.message}")
+        log.error("Error loading rules file: ${e.message}", e)
     }
 }
 
-fun handler(ctx: Context) {
+fun handleRequest(ctx: Context) {
     val path = (ctx.req as Request).originalURI
     val method = ctx.req.method
     val headers = ctx.headerMap()
-    val body = ctx.body()
+    val body = ctx.body().replace("\\s+".toRegex(), "")
 
-    val ruleList = rules.filter { it.method == method }.filter { it.path == path }
-
-    val mutableRuleList: MutableList<Rule> = ruleList.toMutableList()
-
-    val filteredRulesList = mutableListOf<Rule>()
-
-    for (rule in ruleList) {
-        var matching = true
-
-        if (rule.requestHeader != null) {
-            loop@ for (key in rule.requestHeader.keys) {
-                if (!headers.containsKey(key) || !headers[key].equals(rule.requestHeader[key].toString())) {
-                    mutableRuleList.remove(rule)
-                    matching = false
-                    break@loop
-                }
-            }
-        }
-        if(rule.requestBody != null){
-            println(rule.requestBody.toString())
-            if(rule.requestBody.toString().replace("\\s+", "") != body.replace("\\s+", "")){
-                mutableRuleList.remove(rule)
-                matching = false
-            }
-        }
-        if (matching) {
-            filteredRulesList.add(rule)
-            mutableRuleList.remove(rule)
-        }
+    val matchedRules = rules.filter { rule ->
+        rule.method == method && rule.path == path &&
+                (rule.requestHeader?.all { headers[it.key] == it.value } ?: true) &&
+                (rule.requestBody?.toString()?.replace("\\s+".toRegex(), "") == body || rule.requestBody == null)
     }
 
-    val finalRuleToUse = if (filteredRulesList.size > 0) {
-        filteredRulesList[0]
-    } else if (mutableRuleList.size > 0) {
-        filteredRulesList.clear()
-        mutableRuleList[0]
+    val ruleToUse = matchedRules.firstOrNull()
+        ?: throw NotFoundResponse("No matching rule for $method $path")
+
+    log.info("Matched Rule: ${ruleToUse.name}")
+
+    ruleToUse.responseHeader?.forEach { (k, v) -> ctx.header(k, v) }
+    val code = ruleToUse.responseCode.takeIf { it != 0 } ?: 200
+
+    if (mockServerConfig.delayEnabled && mockServerConfig.delayMs > 0) {
+        log.info("Delaying response by ${mockServerConfig.delayMs}ms")
+        Thread.sleep(mockServerConfig.delayMs)
+    }
+    if (ruleToUse.responseFile != null) {
+        sendFileResponse(ctx, ruleToUse.responseFile, code)
     } else {
-        log.error ("Could not find matching rule for Method : $method at path $path")
-        throw NotFoundResponse()
-    }
-
-    log.info("Found Matching Rule: ${finalRuleToUse.name}")
-
-    val responseCode = if(finalRuleToUse.responseCode == 0)  200 else  finalRuleToUse.responseCode
-    finalRuleToUse.responseHeader?.forEach { (k, v) ->  ctx.header(k,v)}
-
-    if(finalRuleToUse.responseFile != null ) {
-        processFile(ctx, finalRuleToUse.responseFile, responseCode)
-    }else {
-        ctx.result(finalRuleToUse.responseBody).status(responseCode)
+        ctx.result(ruleToUse.responseBody).status(code)
     }
 }
 
-fun processFile(ctx: Context, filePath: String, responseCode: Int): String {
+fun sendFileResponse(ctx: Context, filePath: String, responseCode: Int) {
     val extension = File(filePath).extension.lowercase()
-    val text = FileReader(filePath).readText()
+    val text = FileReader(filePath).use { it.readText() }
     when (extension) {
         "json" -> ctx.json(text).status(responseCode)
         "htm", "html" -> ctx.html(text).status(responseCode)
         else -> ctx.result(text).status(responseCode)
-        //TODO: add for images and binary, zip etc
+        // TODO: Add support for images, binaries, zip, etc.
     }
-    return ""
 }
 
-fun getHandlers() = arrayListOf(
+fun getHandlers() = listOf(
     HandlerType.GET,
     HandlerType.POST,
     HandlerType.PUT,
@@ -151,21 +128,17 @@ fun getHandlers() = arrayListOf(
 fun startWatchingRules(file: String) {
     processRules(file)
     val watcher = FileSystems.getDefault().newWatchService()
-    val logDir = Paths.get("./")
-    logDir.register(watcher, ENTRY_MODIFY)
+    val watchDir = Paths.get(".")
+    watchDir.register(watcher, ENTRY_MODIFY)
+
     while (true) {
-        Thread.sleep(1000)
         val key = watcher.take()
-        for (event in key.pollEvents()) {
-            val kind = event.kind()
-            if (ENTRY_MODIFY == kind) {
-                if (file.contains(event.context().toString())) {
-                    println("updating rules file $file")
-                    processRules(file)
-                }
+        key.pollEvents().forEach { event ->
+            if (event.kind() == ENTRY_MODIFY && file.contains(event.context().toString())) {
+                log.info("Rules file modified: $file. Reloading...")
+                processRules(file)
             }
         }
         key.reset()
-        Thread.yield()
     }
 }
