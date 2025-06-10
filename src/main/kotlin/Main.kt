@@ -180,11 +180,18 @@ fun handleRequest(ctx: Context) {
     // Filter only active rules
     val activeRules = rules.filter { it.active }
 
+//    val matchedRules = activeRules.filter { rule ->
+//        rule.method == method && rule.path == path &&
+//                (rule.requestHeader?.all { headers[it.key] == it.value } ?: true) &&
+//                (rule.requestBody?.replace("\\s+".toRegex(), "") == body || rule.requestBody == null)
+//    }
     val matchedRules = activeRules.filter { rule ->
-        rule.method == method && rule.path == path &&
+        val pathWithoutQuery = path.split("?")[0]
+        rule.method == method &&  pathWithoutQuery.matches(rule.path.toRegex()) &&
                 (rule.requestHeader?.all { headers[it.key] == it.value } ?: true) &&
-                (rule.requestBody?.toString()?.replace("\\s+".toRegex(), "") == body || rule.requestBody == null)
+                (rule.requestBody?.replace("\\s+".toRegex(), "") == body || rule.requestBody == null)
     }
+
 
     val ruleToUse = matchedRules.firstOrNull()
         ?: throw NotFoundResponse("No matching rule for $method $path")
