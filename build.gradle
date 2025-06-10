@@ -1,5 +1,5 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.6.20'
+    id 'org.jetbrains.kotlin.jvm' version '2.0.0'
     id 'application'
 }
 
@@ -8,11 +8,12 @@ version = '0.9'
 
 repositories {
     mavenCentral()
+    gradlePluginPortal()
 }
 
 dependencies {
     testImplementation 'org.jetbrains.kotlin:kotlin-test'
-    implementation group: 'io.javalin', name: 'javalin', version: '4.5.0'
+    implementation group: 'io.javalin', name: 'javalin', version: '4.6.8'
     implementation group: 'org.slf4j', name: 'slf4j-simple', version: '1.8.0-beta4'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.9.0'
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.12.4'
@@ -38,9 +39,9 @@ task copyFrontendToResources(type: Copy, dependsOn: buildFrontend) {
     from 'config-ui/dist'
     into 'src/main/resources/dist' // optional: you can change target path if needed
 }
-
-copyFrontendToResources.dependsOn cleanFrontend
-build.dependsOn(copyFrontendToResources)
+//
+// copyFrontendToResources.dependsOn cleanFrontend
+// build.dependsOn(copyFrontendToResources)
 
 
 test {
