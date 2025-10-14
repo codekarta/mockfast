@@ -1,5 +1,5 @@
-import  { useState, useEffect } from 'react';
-import { Plus, Trash2, Upload, Save, Power, PowerOff } from 'lucide-react';
+import  { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, Upload, Save, Power, PowerOff, Download, FileUp } from 'lucide-react';
 
 // Header Editor Component
 const HeaderEditor = ({ headers, onChange, title }) => {
@@ -46,7 +46,7 @@ const HeaderEditor = ({ headers, onChange, title }) => {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 p-4 pt-0">
       <div className="flex justify-between items-center">
         <label className="text-sm font-medium text-gray-700">{title}</label>
         <button
@@ -84,64 +84,8 @@ const HeaderEditor = ({ headers, onChange, title }) => {
   );
 };
 
-// Configuration Section Component
-const ConfigurationSection = ({ config, onConfigChange, onSaveConfig }) => {
-  return (
-    <div className="mb-8 p-6 bg-gray-50 rounded-lg border">
-      <h2 className="text-lg font-semibold mb-4 text-gray-800">Server Configuration</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="delayEnabled"
-            checked={config.delayEnabled}
-            onChange={(e) => onConfigChange({...config, delayEnabled: e.target.checked})}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-          />
-          <label htmlFor="delayEnabled" className="text-sm font-medium text-gray-700">
-            Enable Global Delay
-          </label>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Global Delay (ms)
-          </label>
-          <input
-            type="number"
-            value={config.delayMs}
-            onChange={(e) => onConfigChange({...config, delayMs: parseInt(e.target.value) || 0})}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            disabled={!config.delayEnabled}
-            placeholder="0"
-            min="0"
-          />
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="httpsEnabled"
-            checked={config.useHttps}
-            onChange={(e) => onConfigChange({...config, useHttps: e.target.checked})}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-          />
-          <label htmlFor="httpsEnabled" className="text-sm font-medium text-gray-700">
-            Enable HTTPS
-          </label>
-        </div>
-        
-        <button
-          onClick={onSaveConfig}
-          className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 flex items-center justify-center gap-2 transition-colors font-medium"
-        >
-          <Save size={16} />
-          Save Config
-        </button>
-      </div>
-    </div>
-  );
-};
+// Configuration Section Component - Removed for now as no configuration is needed
+// Can be restored when new server configuration options are added
 // Response Section Component
 const ResponseSection = ({ rule, index, onUpdateRule, onUploadFile }) => {
   const responseTypes = [
@@ -200,9 +144,8 @@ const ResponseSection = ({ rule, index, onUpdateRule, onUploadFile }) => {
   };
 
   return (
-    <div className="mb-4">
+    <div className="p-4 pt-2 bg-green-50">
       <div className="mb-3">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Response Body Type</label>
         <div className="flex flex-wrap gap-3">
           {responseTypes.map((type) => (
             <label key={type.value} className="flex items-center gap-2 cursor-pointer">
@@ -272,9 +215,9 @@ const ResponseSection = ({ rule, index, onUpdateRule, onUploadFile }) => {
         </div>
       ) : (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          {/* <label className="block text-sm font-medium text-gray-700 mb-1">
             Response Body ({rule.responseType?.toUpperCase() || 'TEXT'})
-          </label>
+          </label> */}
           <textarea
             value={rule.responseBody || ''}
             onChange={(e) => onUpdateRule(index, 'responseBody', e.target.value)}
@@ -293,10 +236,6 @@ const ResponseSection = ({ rule, index, onUpdateRule, onUploadFile }) => {
 
 // Request Body Section Component
 const RequestBodySection = ({ rule, index, onUpdateRule }) => {
-  if (!['POST', 'PUT', 'PATCH'].includes(rule.method)) {
-    return null;
-  }
-
   const handleRequestBodyChange = (e) => {
     try {
       const json = e.target.value ? JSON.parse(e.target.value) : null;
@@ -308,16 +247,27 @@ const RequestBodySection = ({ rule, index, onUpdateRule }) => {
     }
   };
 
+  const showRequestBody = ['POST', 'PUT', 'PATCH'].includes(rule.method);
+
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Request Body (JSON)</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Request Body {showRequestBody ? '(JSON)' : '(Not applicable for ' + rule.method + ')'}
+      </label>
       <textarea
         value={rule.requestBody ? JSON.stringify(rule.requestBody, null, 2) : ''}
         onChange={handleRequestBodyChange}
-        className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-        rows={2}
-        placeholder='{"key": "value"}'
+        className="w-full h-[80%] px-3 py-2 mt-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        rows={3}
+        placeholder={showRequestBody ? '{"key": "value"}' : 'Request body not used for ' + rule.method + ' requests'}
+        disabled={!showRequestBody}
+        
       />
+      {showRequestBody && (
+        <p className="text-xs text-gray-500 mt-1">
+          Optional: Match requests with specific JSON body content
+        </p>
+      )}
     </div>
   );
 };
@@ -425,113 +375,105 @@ const RuleCard = ({
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="border-t bg-white p-4">
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rule Name</label>
-            <input
-              type="text"
-              placeholder="Enter rule name"
-              value={rule.name}
-              onChange={(e) => onUpdateRule(index, 'name', e.target.value)}
-              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
-              <select
-                value={rule.method}
-                onChange={(e) => onUpdateRule(index, 'method', e.target.value)}
-                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {httpMethods.map(method => (
-                  <option key={method} value={method}>{method}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Path</label>
-              <input
-                type="text"
-                value={rule.path}
-                onChange={(e) => onUpdateRule(index, 'path', e.target.value)}
-                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="/api/endpoint"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Response Code</label>
-              <input
-                type="number"
-                value={rule.responseCode}
-                onChange={(e) => onUpdateRule(index, 'responseCode', parseInt(e.target.value) || 200)}
-                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Delay Override Section */}
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">Rule-Specific Delay</label>
-              <div className="flex items-center space-x-2">
+        <div className="border-t bg-white space-y-6">
+          {/* Basic Info Section */}
+            <div className="grid grid-cols-5 gap-4 bg-blue-50 p-4 border-b">
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rule Name</label>
                 <input
-                  type="checkbox"
-                  id={`delayOverride-${index}`}
-                  checked={rule.delayOverride || false}
-                  onChange={(e) => onUpdateRule(index, 'delayOverride', e.target.checked)}
-                  className="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+                  type="text"
+                  placeholder="Enter rule name"
+                  value={rule.name}
+                  onChange={(e) => onUpdateRule(index, 'name', e.target.value)}
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <label htmlFor={`delayOverride-${index}`} className="text-sm text-gray-600">
-                  Override global delay
-                </label>
               </div>
-            </div>
-            {rule.delayOverride && (
+              
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
+                <select
+                  value={rule.method}
+                  onChange={(e) => onUpdateRule(index, 'method', e.target.value)}
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {httpMethods.map(method => (
+                    <option key={method} value={method}>{method}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Response Code</label>
+                <input
+                  type="number"
+                  value={rule.responseCode}
+                  onChange={(e) => onUpdateRule(index, 'responseCode', parseInt(e.target.value) || 200)}
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Delay (ms)</label>
                 <input
                   type="number"
                   value={rule.delayMs || 0}
                   onChange={(e) => onUpdateRule(index, 'delayMs', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-yellow-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
-                  placeholder="Delay in milliseconds"
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0"
                   min="0"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  This delay will override the global server delay for this specific rule.
-                </p>
               </div>
-            )}
+              
+              <div className="lg:col-span-5 flex gap-2">
+                <label className="block text-sm font-medium text-gray-700 my-auto">Path</label>
+                <input
+                  type="text"
+                  value={rule.path}
+                  onChange={(e) => onUpdateRule(index, 'path', e.target.value)}
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="/api/endpoint"
+                />
+              </div>
+              
+              
+            </div>
+
+          {/* Matching Section */}
+          <div className='bg-amber-50'>
+            <h3 className="text-md font-semibold text-gray-800  p-2 border-b border-t">Request Matching</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border-b ">
+              <HeaderEditor
+                headers={rule.requestHeader}
+                onChange={(headers) => onUpdateHeaders(index, 'requestHeader', headers)}
+                title="Request Headers"
+              />
+              <RequestBodySection
+                rule={rule}
+                index={index}
+                onUpdateRule={onUpdateRule}
+                
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <HeaderEditor
-              headers={rule.requestHeader}
-              onChange={(headers) => onUpdateHeaders(index, 'requestHeader', headers)}
-              title="Request Headers"
-            />
-            <HeaderEditor
-              headers={rule.responseHeader}
-              onChange={(headers) => onUpdateHeaders(index, 'responseHeader', headers)}
-              title="Response Headers"
-            />
+          {/* Response Section */}
+          <div className='bg-green-50'>
+            <h3 className="text-md font-semibold text-gray-800 p-2 border-b border-t">Response Section</h3>
+            <div className="space-y-4">
+              <ResponseSection
+                rule={rule}
+                index={index}
+                onUpdateRule={onUpdateRule}
+                onUploadFile={onUploadFile}
+              />
+              <HeaderEditor
+                headers={rule.responseHeader}
+                onChange={(headers) => onUpdateHeaders(index, 'responseHeader', headers)}
+                title="Response Headers"
+              />
+            </div>
           </div>
-
-          <ResponseSection
-            rule={rule}
-            index={index}
-            onUpdateRule={onUpdateRule}
-            onUploadFile={onUploadFile}
-          />
-
-          <RequestBodySection
-            rule={rule}
-            index={index}
-            onUpdateRule={onUpdateRule}
-          />
         </div>
       )}
     </div>
@@ -539,11 +481,27 @@ const RuleCard = ({
 };
 
 // Rules Header Component
-const RulesHeader = ({ activeCount, onAddRule, onSaveRules }) => {
+const RulesHeader = ({ activeCount, onAddRule, onSaveRules, onDownloadRules, onImportRules }) => {
   return (
     <div className="flex justify-between items-center mb-4">
       <h2 className="text-lg font-semibold">Mock Rules ({activeCount} active)</h2>
       <div className="flex gap-2">
+        <button
+          onClick={onDownloadRules}
+          className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 flex items-center gap-2 transition-colors"
+          title="Download rules.json"
+        >
+          <Download size={16} />
+          Download
+        </button>
+        <button
+          onClick={onImportRules}
+          className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 flex items-center gap-2 transition-colors"
+          title="Import rules.json"
+        >
+          <FileUp size={16} />
+          Import
+        </button>
         <button
           onClick={onAddRule}
           className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2 transition-colors"
@@ -566,14 +524,8 @@ const RulesHeader = ({ activeCount, onAddRule, onSaveRules }) => {
 // Main Component
 const MockRulesManager = () => {
   const [rules, setRules] = useState([]);
-  const [config, setConfig] = useState({
-    delayEnabled: false,
-    delayMs: 0,
-    useHttps: false,
-    useSelfSigned: true,
-    keyFile: '',
-    certFile: ''
-  });
+
+  const fileInputRef = useRef(null);
 
   const httpMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
   const defaultRule = {
@@ -588,13 +540,11 @@ const MockRulesManager = () => {
     requestBody: null,
     active: true,
     responseType: 'text',
-    delayOverride: false,
     delayMs: 0
   };
 
   useEffect(() => {
     loadRules();
-    loadConfig();
   }, []);
 
   const loadRules = async () => {
@@ -606,7 +556,6 @@ const MockRulesManager = () => {
           ...rule, 
           active: rule.active !== false, 
           responseType: rule.responseType || (rule.responseFile ? 'file' : 'text'),
-          delayOverride: rule.delayOverride || false,
           delayMs: rule.delayMs || 0
         })));
       }
@@ -615,17 +564,6 @@ const MockRulesManager = () => {
     }
   };
 
-  const loadConfig = async () => {
-    try {
-      const response = await fetch('/api/config');
-      if (response.ok) {
-        const data = await response.json();
-        setConfig(data);
-      }
-    } catch (error) {
-      console.error('Failed to load config:', error);
-    }
-  };
 
   const saveRules = async () => {
     try {
@@ -638,11 +576,8 @@ const MockRulesManager = () => {
           ruleData.responseFile = null;
         }
         
-        // Include delay override settings
-        if (rule.delayOverride) {
-          ruleData.delayOverride = true;
-          ruleData.delayMs = rule.delayMs || 0;
-        }
+        // Include delay setting
+        ruleData.delayMs = rule.delayMs || 0;
         
         return ruleData;
       });
@@ -662,22 +597,6 @@ const MockRulesManager = () => {
     }
   };
 
-  const saveConfig = async () => {
-    try {
-      const response = await fetch('/apply-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
-
-      if (response.ok) {
-        alert('Configuration saved successfully!');
-      }
-    } catch (error) {
-      console.error('Failed to save config:', error);
-      alert('Failed to save configuration');
-    }
-  };
 
   const addRule = () => {
     setRules([...rules, { 
@@ -748,6 +667,71 @@ const MockRulesManager = () => {
     }
   };
 
+  const downloadRules = async () => {
+    try {
+      const response = await fetch('/api/rules/download');
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rules.json';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        console.log('Rules downloaded successfully');
+      } else {
+        alert('Failed to download rules');
+      }
+    } catch (error) {
+      console.error('Failed to download rules:', error);
+      alert('Failed to download rules');
+    }
+  };
+
+  const importRules = () => {
+    // Trigger file input click
+    fileInputRef.current?.click();
+  };
+
+  const handleFileImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.endsWith('.json')) {
+      alert('Please select a valid JSON file');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/rules/import', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.ok) {
+        const message = await response.text();
+        alert(message);
+        // Reload rules to show imported data
+        await loadRules();
+      } else {
+        const error = await response.text();
+        alert(`Failed to import rules: ${error}`);
+      }
+    } catch (error) {
+      console.error('Failed to import rules:', error);
+      alert('Failed to import rules');
+    }
+
+    // Reset file input
+    event.target.value = '';
+  };
+
   const activeRulesCount = rules.filter(r => r.active).length;
 
   return (
@@ -756,16 +740,21 @@ const MockRulesManager = () => {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-6">MockFast - Rule Manager</h1>
           
-          <ConfigurationSection
-            config={config}
-            onConfigChange={setConfig}
-            onSaveConfig={saveConfig}
+          {/* Hidden file input for importing rules */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleFileImport}
+            className="hidden"
           />
 
           <RulesHeader
             activeCount={activeRulesCount}
             onAddRule={addRule}
             onSaveRules={saveRules}
+            onDownloadRules={downloadRules}
+            onImportRules={importRules}
           />
 
           <div className="space-y-4">

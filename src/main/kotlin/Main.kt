@@ -49,13 +49,19 @@ fun main(args: Array<String>) {
         }
         // Enable CORS for development
         config.enableCorsForAllOrigins()
+    }.before { ctx ->
+        // Add explicit CORS headers
+        ctx.header("Access-Control-Allow-Origin", "*")
+        ctx.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+        ctx.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
+        ctx.header("Access-Control-Max-Age", "3600")
     }
 
     // API endpoints for rule management
     configUi.addHandler(HandlerType.POST, "/apply-config") { ctx ->
         val newMockServerConfig = gson.fromJson(ctx.body(), MockServerConfig::class.java)
         mockServerConfig = newMockServerConfig
-        log.info("Configuration updated: delayEnabled=${mockServerConfig.delayEnabled}, delayMs=${mockServerConfig.delayMs}")
+        log.info("Configuration updated")
         ctx.status(200).result("Configuration applied")
     }
 
@@ -81,6 +87,53 @@ fun main(args: Array<String>) {
         } catch (e: Exception) {
             log.error("Error saving rules via API: ${e.message}", e)
             ctx.status(500).result("Error saving rules: ${e.message}")
+        }
+    }
+
+    configUi.addHandler(HandlerType.GET, "/api/rules/download") { ctx ->
+        try {
+            val file = File(ruleFile)
+            if (!file.exists()) {
+                ctx.status(404).result("Rules file not found")
+                return@addHandler
+            }
+            
+            val rulesJson = file.readText()
+            ctx.header("Content-Type", "application/json")
+            ctx.header("Content-Disposition", "attachment; filename=\"rules.json\"")
+            ctx.result(rulesJson)
+            log.info("Rules file downloaded")
+        } catch (e: Exception) {
+            log.error("Error downloading rules: ${e.message}", e)
+            ctx.status(500).result("Error downloading rules: ${e.message}")
+        }
+    }
+
+    configUi.addHandler(HandlerType.POST, "/api/rules/import") { ctx ->
+        try {
+            val uploadedFile: UploadedFile = ctx.uploadedFile("file")
+                ?: throw IllegalArgumentException("No file uploaded")
+
+            val fileContent = uploadedFile.content.bufferedReader().use { it.readText() }
+            
+            // Validate JSON format
+            val importedRules = try {
+                gson.fromJson<List<Rule>>(fileContent, object : TypeToken<List<Rule>>() {}.type)
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Invalid rules.json format: ${e.message}")
+            }
+
+            // Save to rules file
+            saveRulesToFile(ruleFile, importedRules)
+            
+            log.info("Rules imported successfully: ${importedRules.size} rules from ${uploadedFile.filename}")
+            ctx.status(200).result("Rules imported successfully: ${importedRules.size} rules")
+        } catch (e: IllegalArgumentException) {
+            log.error("Invalid rules file: ${e.message}", e)
+            ctx.status(400).result(e.message ?: "Invalid rules file")
+        } catch (e: Exception) {
+            log.error("Error importing rules: ${e.message}", e)
+            ctx.status(500).result("Error importing rules: ${e.message}")
         }
     }
 
@@ -111,6 +164,12 @@ fun main(args: Array<String>) {
         }
     }
 
+    // Handle OPTIONS preflight requests for config UI
+    configUi.options("/*") { ctx ->
+        log.info("Handling OPTIONS preflight request for config UI: ${ctx.path()}")
+        ctx.status(204).result("")
+    }
+
     // Start configuration UI server
     configUi.start(7071)
     log.info("Configuration UI started on port 7071")
@@ -118,9 +177,22 @@ fun main(args: Array<String>) {
     // Main mock server
     val app = Javalin.create { config ->
         config.enableCorsForAllOrigins()
+    }.before { ctx ->
+        // Add explicit CORS headers for all requests
+        ctx.header("Access-Control-Allow-Origin", "*")
+        ctx.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+        ctx.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
+        ctx.header("Access-Control-Max-Age", "3600")
     }.start(port)
 
-    getHandlers().forEach { handlerType ->
+    // Handle OPTIONS preflight requests before rule matching
+    app.options("/*") { ctx ->
+        log.info("Handling OPTIONS preflight request for: ${ctx.path()}")
+        ctx.status(204).result("")
+    }
+
+    // Register other HTTP method handlers
+    getHandlers().filter { it != HandlerType.OPTIONS }.forEach { handlerType ->
         app.addHandler(handlerType, "/*") { ctx -> handleRequest(ctx) }
     }
 
@@ -198,21 +270,10 @@ fun handleRequest(ctx: Context) {
 
     log.info("Matched Rule: ${ruleToUse.name}")
 
-    // Apply delay - check rule-specific delay first, then global delay
-    val delayToApply = when {
-        ruleToUse.delayOverride -> {
-            log.info("Applying rule-specific delay: ${ruleToUse.delayMs}ms")
-            ruleToUse.delayMs
-        }
-        mockServerConfig.delayEnabled -> {
-            log.info("Applying global delay: ${mockServerConfig.delayMs}ms")
-            mockServerConfig.delayMs
-        }
-        else -> 0L
-    }
-
-    if (delayToApply > 0) {
-        Thread.sleep(delayToApply)
+    // Apply rule-specific delay if configured
+    if (ruleToUse.delayMs > 0) {
+        log.info("Applying delay: ${ruleToUse.delayMs}ms")
+        Thread.sleep(ruleToUse.delayMs)
     }
 
     // Apply response headers

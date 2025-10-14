@@ -10,7 +10,6 @@ data class Rule(
     val responseCode: Int = 200,
     val requestBody: String = "",
     val active: Boolean = true,
-    val responseType: String = "text", // New field for response type
-    val delayOverride: Boolean = false, // New field for delay override
-    val delayMs: Long = 0 // New field for rule-specific delay
+    val responseType: String = "text",
+    val delayMs: Long = 0 // Delay in milliseconds for this rule (default: 0 = no delay)
 )
